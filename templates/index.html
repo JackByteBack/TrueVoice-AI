@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <title>Fake Audio Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="page">
+
+    <header class="hero">
+      <h1>Fake Audio Detector</h1>
+      <p>Upload an audio file to analyze its authenticity</p>
+    </header>
+
+    <section class="card">
+      <form action="/predict" enctype="multipart/form-data" method="post" id="uploadForm">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" name="file" accept="audio/*" required id="fileInput">
+          <div class="upload-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="upload-label">Drop an audio file or click to browse</div>
+          <div class="upload-sublabel">WAV, MP3, M4A, FLAC</div>
+          <div class="upload-filename" id="fileName"></div>
+        </div>
+        <button type="submit" class="btn" id="submitBtn">Analyze Audio</button>
+      </form>
+    </section>
+
+    {% if error %}
+    <div class="error">
+      <div class="error-heading">Analysis Failed</div>
+      <div class="error-detail">{{ error }}</div>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="results">
+      <div class="results-top">
+        <span class="filename">{{ result.filename }}</span>
+        <span class="badge {{ result.label|lower }}">
+          <span class="badge-dot"></span>
+          {{ result.label }}
+        </span>
+      </div>
+
+      <div class="confidence">
+        <div class="confidence-meta">
+          <span>Confidence</span>
+          <span>{{ result.prob }}</span>
+        </div>
+        <div class="confidence-track">
+          <div class="confidence-fill {{ result.label|lower }}" style="width: {{ (result.prob * 100)|round }}%"></div>
+        </div>
+      </div>
+
+      <div class="plots">
+        <div class="plot-block">
+          <div class="plot-title">Waveform</div>
+          <div class="plot-frame">
+            <div id="waveformPlot" style="width:100%;height:180px;"></div>
+          </div>
+        </div>
+        <div class="plot-divider"></div>
+        <div class="plot-block">
+          <div class="plot-title">Mel Spectrogram</div>
+          <div class="plot-frame">
+            <div id="melPlot" style="width:100%;height:260px;"></div>
+          </div>
+        </div>
+      </div>
+
+      {% if result.explanation %}
+      <div class="explanation">
+        <div class="explanation-heading">AI Analysis</div>
+        <div class="explanation-body">{{ result.explanation }}</div>
+      </div>
+      {% endif %}
+
+      <script>
+        var plotTheme = {
+          paper_bgcolor: 'rgba(0,0,0,0)',
+          plot_bgcolor: 'rgba(0,0,0,0)',
+          font: { color: '#666', family: "'Inter', sans-serif", size: 10 },
+          margin: { t: 4, l: 40, r: 12, b: 32 },
+          xaxis: {
+            gridcolor: 'rgba(255,255,255,0.04)',
+            zerolinecolor: 'rgba(255,255,255,0.04)',
+            linecolor: 'rgba(255,255,255,0.06)',
+            tickfont: { size: 10 }
+          },
+          yaxis: {
+            gridcolor: 'rgba(255,255,255,0.04)',
+            zerolinecolor: 'rgba(255,255,255,0.04)',
+            linecolor: 'rgba(255,255,255,0.06)',
+            tickfont: { size: 10 }
+          }
+        };
+
+        var waveform = JSON.parse('{{ result.waveform | tojson | safe }}');
+        Plotly.newPlot('waveformPlot', [{
+          y: waveform,
+          type: 'scatter',
+          mode: 'lines',
+          line: { color: '#666', width: 0.8 },
+          fill: 'tozeroy',
+          fillcolor: 'rgba(255,255,255,0.03)'
+        }], Object.assign({}, plotTheme, {
+          xaxis: Object.assign({}, plotTheme.xaxis, { title: { text: 'Time', font: { size: 10 } } }),
+          yaxis: Object.assign({}, plotTheme.yaxis, { title: { text: 'Amplitude', font: { size: 10 } } })
+        }), { displayModeBar: false, responsive: true });
+
+        var melData = JSON.parse('{{ result.mel_data | tojson | safe }}');
+        Plotly.newPlot('melPlot', [{
+          z: melData,
+          type: 'heatmap',
+          colorscale: [
+            [0, '#000000'],
+            [0.25, '#1a1a2e'],
+            [0.5, '#0f3460'],
+            [0.75, '#533483'],
+            [1, '#e94560']
+          ],
+          showscale: true,
+          colorbar: {
+            thickness: 10,
+            len: 0.75,
+            tickfont: { size: 9, color: '#555' },
+            borderwidth: 0
+          }
+        }], Object.assign({}, plotTheme, {
+          xaxis: Object.assign({}, plotTheme.xaxis, { title: { text: 'Frames', font: { size: 10 } } }),
+          yaxis: Object.assign({}, plotTheme.yaxis, { title: { text: 'Mel Bands', font: { size: 10 } } }),
+          margin: { t: 4, l: 40, r: 56, b: 36 }
+        }), { displayModeBar: false, responsive: true });
+      </script>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <script>
+    var fileInput = document.getElementById('fileInput');
+    var zone = document.getElementById('uploadZone');
+    var fileName = document.getElementById('fileName');
+
+    fileInput.addEventListener('change', function() {
+      if (this.files.length) {
+        zone.classList.add('filled');
+        fileName.textContent = this.files[0].name;
+      } else {
+        zone.classList.remove('filled');
+      }
+    });
+
+    zone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      this.style.borderColor = 'rgba(255,255,255,0.35)';
+    });
+
+    zone.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      this.style.borderColor = '';
+    });
+
+    zone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      this.style.borderColor = '';
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        zone.classList.add('filled');
+        fileName.textContent = e.dataTransfer.files[0].name;
+      }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', function() {
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Analyzing\u2026';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+temp_*.wav
+temp_*.m4a
+models/
+data/
+results/
